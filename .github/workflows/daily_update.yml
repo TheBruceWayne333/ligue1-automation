@@ -1,1 +1,50 @@
+import os
+import json
+import google.generativeai as genai
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
 
+# --- SETUP AI ---
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+def get_ai_summary(match_name, score):
+    prompt = f"Write a 2-sentence exciting football match summary for {match_name} which ended {score}. Focus on the Ligue 1 atmosphere."
+    response = model.generate_content(prompt)
+    return response.text
+
+# --- SETUP BLOGGER ---
+def inject_to_blogger(html_content):
+    info = json.loads(os.environ['SERVICE_ACCOUNT_JSON'])
+    creds = service_account.Credentials.from_service_account_info(info)
+    scoped_creds = creds.with_scopes(['https://www.googleapis.com/auth/blogger'])
+    service = build('blogger', 'v3', credentials=scoped_creds)
+    
+    # We "Patch" (Update) the existing post
+    body = {"content": html_content}
+    service.posts().patch(blogId=os.environ['BLOG_ID'], postId=os.environ['POST_ID'], body=body).execute()
+
+# --- THE DESIGN TEMPLATE ---
+def create_layout(match_data):
+    # This builds the HTML using your Dark Hub CSS
+    cards = ""
+    for match in match_data:
+        summary = get_ai_summary(match['name'], match['score'])
+        cards += f"""
+        <div class="match-card" style="background:#161618; border:1px solid #27272a; padding:20px; border-radius:15px; margin-bottom:20px; color:white;">
+            <h2 style="color:#00f2ff;">{match['name']} ({match['score']})</h2>
+            <p>{summary}</p>
+            <div class="arena-liveblog" data-event="{match['arena_id']}"></div>
+        </div>
+        """
+    return f"<html><body style='background:#0a0a0b;'>{cards}</body></html>"
+
+if __name__ == "__main__":
+    # Example data (In the future, fetch this from a Football API)
+    matches = [
+        {"name": "PSG vs Marseille", "score": "3-1", "arena_id": "12345"},
+        {"name": "Monaco vs Lyon", "score": "0-0", "arena_id": "67890"}
+    ]
+    
+    final_html = create_layout(matches)
+    inject_to_blogger(final_html)
