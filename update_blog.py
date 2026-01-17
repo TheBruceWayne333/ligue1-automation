@@ -42,3 +42,64 @@ def create_match_block(home, away, score, summary, arena_id):
 # LOGIC TO SEND TO BLOGGER
 # You will use the 'google-api-python-client' library to 
 # send this finished HTML to your blog ID.
+
+import os
+import json
+from googleapiclient.discovery import build
+from google.oauth2 import service_account
+
+# --- CONFIGURATION ---
+# These are the IDs we found in your Blogger URL
+BLOG_ID = 'YOUR_BLOG_ID'
+POST_ID = 'YOUR_POST_ID'
+
+# --- 1. THE INJECTION MATERIAL (Your HTML Design) ---
+def generate_html(match_name, score, summary, arena_id):
+    return f"""
+<div class="match-card">
+    <div class="match-status-bar">
+        <h2>{match_name} {score}</h2>
+        <span class="badge-final">AI FINAL REPORT</span>
+    </div>
+    <div class="summary-wrapper">
+        <div class="ai-label">🤖 AI MATCH SUMMARY</div>
+        <div class="summary-text">
+            <p>{summary}</p>
+        </div>
+        <div class="arena-label">REAL-TIME PLAY-BY-PLAY FEED</div>
+        <div class="arena-liveblog" data-event="{arena_id}"></div>
+        <script async src="https://go.arena.im/public/js/arenalib.js?p=the-ai-sports-pulse&e={arena_id}"></script>
+    </div>
+</div>
+"""
+
+# --- 2. THE INJECTION PROCESS ---
+def inject_content():
+    # Load your "Master Key" from the GitHub Secret
+    info = json.loads(os.environ['SERVICE_ACCOUNT_JSON'])
+    creds = service_account.Credentials.from_service_account_info(info)
+    scoped_creds = creds.with_scopes(['https://www.googleapis.com/auth/blogger'])
+    
+    # Connect to Blogger
+    service = build('blogger', 'v3', credentials=scoped_creds)
+    
+    # Generate the new content
+    # (In a full setup, you'd fetch these variables from a sports API)
+    new_match_html = generate_html(
+        "OM vs LYON", 
+        "2 - 1", 
+        "Marseille secured a dramatic victory...", 
+        "NEW_ARENA_ID"
+    )
+    
+    # Perform the injection
+    # This takes your NEW html and UPDATES the existing post
+    body = {
+        "content": new_match_html 
+    }
+    
+    service.posts().patch(blogId=BLOG_ID, postId=POST_ID, body=body).execute()
+    print("Injection Successful!")
+
+if __name__ == "__main__":
+    inject_content()
